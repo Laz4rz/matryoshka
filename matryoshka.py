@@ -14,13 +14,11 @@ class Pooler(nn.Module):
             self.activation = nn.Tanh()
             if base_model is not None:
                 with torch.no_grad():
-                    weights = base_model.model.pooler.dense.weight[:
-                                                                   hidden_size, :
-                                                                   hidden_size]
+                    weights = base_model.model.pooler.dense.weight[:hidden_size, :hidden_size]
                     biases = base_model.model.pooler.dense.bias[:hidden_size]
                     self.dense.weight.copy_(weights)
                     self.dense.bias.copy_(biases)
-            self.pooler = self.cls_token
+            self.pooler = self.cls_token_pooler
         elif mean_pooler:
             self.pooler = self.mean_pooler
 
@@ -35,7 +33,7 @@ class Pooler(nn.Module):
         mean_pooled = sum_embeddings / torch.clamp(sum_mask, min=1e-9)
         return mean_pooled
 
-    def cls_token(self, inputs):
+    def cls_token_pooler(self, inputs):
         cls_tokens = inputs[:, 0]
         pooled_output = self.dense(cls_tokens)
         pooled_output = self.activation(pooled_output)
@@ -70,38 +68,77 @@ class BaseModel(nn.Module):
 
 class Matryoshka(nn.Module):
 
-    def __init__(
-        self,
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        matryoshka_dim=64,
-    ):
+    def __init__(self,
+                 model_name="sentence-transformers/all-MiniLM-L6-v2",
+                 matryoshka_dim=64,
+                 device="cpu"):
         super(Matryoshka, self).__init__()
+        self.device = device
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
         self.model = BaseModel(model_name)
-        self.pooler = Pooler(hidden_size=matryoshka_dim, base_model=None, mean_pooler=True)
+        self.pooler = Pooler(hidden_size=matryoshka_dim,
+                             base_model=None,
+                             mean_pooler=True)
         self.normalizer = Normalizer()
 
         assert self.model.config.hidden_size >= matryoshka_dim, \
             f"Model hidden size ({self.model.config.hidden_size}) must be greater than or equal to matryoshka_dim ({matryoshka_dim})"
-
+        self.name = f"Matryoshka({model_name}, {matryoshka_dim})"
         self.matryoshka_dim = matryoshka_dim
 
-    def encode(self, sentences: list[str],
-               **kwargs) -> torch.Tensor | np.ndarray:
-        inputs = self.tokenizer(sentences,
+    def encode(self, sentences, batch_size=32, **kwargs):
+        """ Returns a list of embeddings for the given sentences.
+        
+        Args:
+            sentences (`List[str]`): List of sentences to encode
+            batch_size (`int`): Batch size for the encoding
+
+        Returns:
+            `List[np.ndarray]` or `List[tensor]`: List of embeddings for the given sentences
+        """
+        all_embeddings = []
+
+        valid_kwargs = {}
+        for key in kwargs:
+            if key in self.tokenizer.model_input_names:
+                valid_kwargs[key] = kwargs[key]
+
+        length_sorted_idx = np.argsort([len(sen) for sen in sentences])
+        sentences_sorted = [sentences[idx] for idx in length_sorted_idx]
+
+        for start_index in range(0, len(sentences), batch_size):
+            sentences_batch = sentences_sorted[start_index:start_index +
+                                               batch_size]
+
+            real_batch_size = len(sentences_batch)
+
+            inputs = self.tokenizer(sentences_batch,
                                     padding=True,
                                     truncation=True,
-                                    return_tensors='pt',
-                                    **kwargs)
-        with torch.no_grad():
-            matryoshka_output = self(**inputs)
-        return matryoshka_output.cpu().numpy()
+                                    return_tensors="pt",
+                                    **valid_kwargs)
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            with torch.no_grad():
+                embeddings = self(**inputs)
+
+            assert embeddings.shape == (
+                real_batch_size, self.matryoshka_dim
+            ), f"{start_index}: Expected shape ({batch_size}, {self.matryoshka_dim}), got {embeddings.shape}"
+
+            all_embeddings.extend(embeddings.cpu().numpy())
+
+        all_embeddings = [
+            all_embeddings[idx] for idx in np.argsort(length_sorted_idx)
+        ]
+
+        return all_embeddings
 
     def forward(self, **kwargs):
-        model_output = self.model(
-            **kwargs)
+        model_output = self.model(**kwargs)
         model_output_reduced = model_output[:, :, :self.matryoshka_dim]
-        pooled_output = self.pooler(model_output_reduced, kwargs['attention_mask'])
+        pooled_output = self.pooler(model_output_reduced,
+                                    kwargs['attention_mask'])
         normalized_output = self.normalizer(pooled_output)
         return normalized_output

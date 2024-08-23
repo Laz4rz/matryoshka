@@ -11,6 +11,6 @@ tasks = mteb.get_tasks(tasks=["Banking77Classification"])
 evaluation = mteb.MTEB(tasks=tasks)
 
 print(f"Running evaluation for {model_name}")
-results = evaluation.run(model, output_folder=f"results/{model_name}")
+results = evaluation.run(model, output_folder=f"results/{model_name}", verbose=True)
 
 print(results)
