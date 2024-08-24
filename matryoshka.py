@@ -84,7 +84,7 @@ class Matryoshka(nn.Module):
 
         assert self.model.config.hidden_size >= matryoshka_dim, \
             f"Model hidden size ({self.model.config.hidden_size}) must be greater than or equal to matryoshka_dim ({matryoshka_dim})"
-        self.name = f"Matryoshka({model_name}, {matryoshka_dim})"
+        self.name = f"Matryoshka(model={model_name.split('/')[-1]}, dim={matryoshka_dim})"
         self.matryoshka_dim = matryoshka_dim
 
     def encode(self, sentences, batch_size=32, **kwargs):

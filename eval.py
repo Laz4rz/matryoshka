@@ -11,6 +11,8 @@ tasks = mteb.get_tasks(tasks=["Banking77Classification"])
 evaluation = mteb.MTEB(tasks=tasks)
 
 print(f"Running evaluation for {model_name}")
-results = evaluation.run(model, output_folder=f"results/{model_name}", verbose=True)
+# name = model_name.split("/")[-1]
+name = matryoshka.name
+results = evaluation.run(matryoshka, output_folder=f"results/{name}", verbose=True)
 
 print(results)
