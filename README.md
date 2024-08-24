@@ -25,4 +25,7 @@ model_output[1] -- embedding per token + pooling -> [batch, 384]
 
 Instead of pooling in classical sense (aggregation statistic), it takes the CLS token from first postion per each batch item. 
 
+### Matryoshka-Adaptor: Unsupervised and Supervised Tuning for Smaller Embedding Dimensions
+
+##### Losses 
 

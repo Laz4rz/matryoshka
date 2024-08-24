@@ -5,6 +5,17 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModel
 
 
+MODEL_CARD_DATA = {
+    "name": "Matryoshka",
+    "description": "This is a custom model trained for text embedding with dimensionality reduction.",
+    "version": "1.0",
+    "license": "Apache-2.0",
+    "limitations": "Not suitable for legal or medical advice.",
+    "author": "Laz4rz",
+    "contact": "laz4rz@gmail",
+}
+
+
 class Pooler(nn.Module):
 
     def __init__(self, hidden_size=None, base_model=None, cls_token_pooler=False, mean_pooler=True):
@@ -85,6 +96,7 @@ class Matryoshka(nn.Module):
         assert self.model.config.hidden_size >= matryoshka_dim, \
             f"Model hidden size ({self.model.config.hidden_size}) must be greater than or equal to matryoshka_dim ({matryoshka_dim})"
         self.name = f"Matryoshka(model={model_name.split('/')[-1]}, dim={matryoshka_dim})"
+        self.model_card_data = MODEL_CARD_DATA
         self.matryoshka_dim = matryoshka_dim
 
     def encode(self, sentences, batch_size=32, **kwargs):

@@ -1,2 +1,12 @@
+# python cache 
 __pycache__/
 *.pyc
+
+# ignore data
+data/
+
+# dsstore
+.DS_Store
+
+# data reference in readme
+!data/*.md
