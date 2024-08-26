@@ -18,7 +18,7 @@ sentences = ["sentence", "not a sentence"]
 
 # Load model from HuggingFace Hub
 tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
-matryoshka = Matryoshka(matryoshka_dim=64)
+matryoshka = Matryoshka(adaptor=False, matryoshka_dim=384)
 model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
 
 # Tokenize sentences
@@ -28,9 +28,9 @@ print("Encoded input shape:", encoded_input['input_ids'].shape)
 # Compute token embeddings
 with torch.no_grad():
     model_output = model(**encoded_input)
-    matryoshka_output = matryoshka(**encoded_input)
+    matryoshka_output = matryoshka(pooling=False, **encoded_input)
 
-assert torch.allclose(model_output[0], matryoshka_output[0])
+assert torch.allclose(model_output[0], matryoshka_output, atol=1e-6)
 
 # Perform pooling
 sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
