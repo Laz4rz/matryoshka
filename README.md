@@ -73,3 +73,74 @@ Here:
 
 ##### Losses 
 
+### Pairwise Loss
+
+```python
+class PairwiseSimilarityLossParallel(nn.Module):
+    def __init__(self):
+        super(PairwiseSimilarityLossParallel, self).__init__()
+
+    def forward(self, embeddings, adapted_embeddings, m_list, reduce=True):
+        loss = 0.0
+        counter = 0
+        partial_counter = 0
+
+        partial_loss = {m: 0.0 for m in m_list}
+
+        # something is potentially wrong with indexing, single check yields correct loss
+        for i in range(len(embeddings)):
+            cloned_target = embeddings[i].unsqueeze(0).repeat(len(embeddings), 1)
+            target_similarity = F.cosine_similarity(cloned_target[i:], embeddings[i:], dim=1)
+            cloned_adapted = adapted_embeddings[i].unsqueeze(0).repeat(len(adapted_embeddings), 1)
+            for m in m_list:
+                reduced_similarity = F.cosine_similarity(cloned_adapted[i:, :m], adapted_embeddings[i:, :m], dim=1)
+                loss += torch.sum(torch.abs((reduced_similarity - target_similarity)))
+                partial_loss[m] += torch.sum(torch.abs((reduced_similarity - target_similarity)))
+                counter += len(target_similarity)
+            partial_counter += len(target_similarity)
+
+        if reduce:
+            partial_counter = counter // len(m_list)
+            return loss / counter, {m: loss / partial_counter for m, loss in partial_loss.items()}
+        return loss, partial_loss
+```
+
+### Regularization Loss
+
+```python
+class RegularizingLoss(nn.Module):
+    def __init__(self):
+        super(RegularizingLoss, self).__init__()
+
+    def forward(self, embeddings, adapted_embeddings):
+        loss = 0.0
+        for i in range(len(embeddings)):
+            loss += torch.abs(embeddings[i] - adapted_embeddings[i])
+        return loss.mean()
+```
+
+### Top-K Loss
+
+```python
+class TopKSimilarityLoss(nn.Module):
+    def __init__(self, k=5):
+        super(TopKSimilarityLoss, self).__init__()
+        self.k = k
+
+    def forward(self, embeddings, adapted_embeddings, m_list):
+        sims = torch.triu(torch.matmul(embeddings, embeddings.T), diagonal=1)
+        topk_val, topk_idx = torch.topk(sims, self.k, dim=1)
+
+        mask = torch.zeros_like(sims, dtype=torch.bool)
+        mask.scatter_(1, topk_idx, True)
+        masked_sims = sims * mask
+
+        for m in m_list:
+            reduced_sims = torch.triu(torch.matmul(adapted_embeddings[:, :m], adapted_embeddings[:, :m].T), diagonal=1)
+            masked_reduced_sims = reduced_sims * mask
+            loss = torch.abs(masked_sims - masked_reduced_sims)
+            loss = loss.mean()
+
+        reducer = torch.sum(topk_val.reshape(-1).where(topk_val.reshape(-1) == 0, 1))
+        return loss / reducer
+```
