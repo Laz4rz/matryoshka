@@ -4,6 +4,10 @@ import torch.nn.functional as F
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+np.random.seed(42)
+
 
 MODEL_CARD_DATA = {
     "name": "Matryoshka",
@@ -82,11 +86,17 @@ class Adaptor(nn.Module):
         def __init__(self, hidden_size):
             super(Adaptor, self).__init__()
             self.down_project = nn.Linear(hidden_size, 256)
+            self.ffn = nn.Sequential(
+                nn.Linear(256, 256),
+                nn.ReLU(),
+                nn.Linear(256, 256)
+            )
             self.activation = nn.ReLU()
             self.up_project = nn.Linear(256, hidden_size)
 
         def forward(self, inputs):
             down_projected = self.activation(self.down_project(inputs))
+            # ffn_output = self.activation(self.ffn(down_projected))
             up_projected = self.up_project(down_projected)
             return up_projected
 
@@ -170,11 +180,16 @@ class Matryoshka(nn.Module):
 
         return np.array(all_embeddings)
 
-    def forward(self, pooling=True, reduce=True, **kwargs):
+    def forward(self, pooling=True, reduce=True, skip=False, **kwargs):
         output = self.model(**kwargs)
 
         if self.adaptor:
+            if skip:
+                skipped = output.clone()
             output = self.adaptor(output)
+            if skip:
+                output = output + skipped
+
 
         if reduce:
             output = output[:, :, :self.matryoshka_dim]
