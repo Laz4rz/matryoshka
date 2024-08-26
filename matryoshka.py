@@ -82,6 +82,17 @@ class PairwiseSimilarityLossParallel(nn.Module):
             partial_counter = counter // len(m_list)
             return loss / counter, {m: loss / partial_counter for m, loss in partial_loss.items()}
         return loss, partial_loss
+    
+
+class RegularizingLoss(nn.Module):
+    def __init__(self):
+        super(RegularizingLoss, self).__init__()
+
+    def forward(self, embeddings, adapted_embeddings):
+        loss = 0.0
+        for i in range(len(embeddings)):
+            loss += torch.abs(embeddings[i] - adapted_embeddings[i])
+        return loss.mean()
 
 
 class Pooler(nn.Module):
@@ -157,12 +168,15 @@ class Adaptor(nn.Module):
             )
             self.activation = nn.ReLU()
             self.up_project = nn.Linear(256, hidden_size)
+            self.layernorm = nn.LayerNorm(hidden_size)
 
         def forward(self, inputs):
             down_projected = self.activation(self.down_project(inputs))
             # ffn_output = self.activation(self.ffn(down_projected))
             up_projected = self.up_project(down_projected)
-            return up_projected
+            output = inputs + up_projected
+            output = self.layernorm(output)
+            return output
 
 
 class Matryoshka(nn.Module):
@@ -245,7 +259,7 @@ class Matryoshka(nn.Module):
             return np.array(all_embeddings)[:, :matryoshka_dim]
         return np.array(all_embeddings)
 
-    def forward(self, pooling=True, reduce=True, skip=False, **kwargs):
+    def forward(self, pooling=True, reduce=True, **kwargs):
         output = self.model(**kwargs)
         if reduce:
             output = output[:, :, :self.matryoshka_dim]
@@ -256,10 +270,6 @@ class Matryoshka(nn.Module):
             output = self.normalizer(output)
 
         if self.adaptor:
-            if skip:
-                output = output + self.normalizer(self.adaptor(output))
-            else:
-                output = self.adaptor(output)
-            output = self.normalizer(output)
+            output = self.adaptor(output)
         
         return output
