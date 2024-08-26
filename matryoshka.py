@@ -93,6 +93,29 @@ class RegularizingLoss(nn.Module):
         for i in range(len(embeddings)):
             loss += torch.abs(embeddings[i] - adapted_embeddings[i])
         return loss.mean()
+    
+
+class TopKSimilarityLoss(nn.Module):
+    def __init__(self, k=5):
+        super(TopKSimilarityLoss, self).__init__()
+        self.k = k
+
+    def forward(self, embeddings, adapted_embeddings, m_list):
+        sims = torch.triu(torch.matmul(embeddings, embeddings.T), diagonal=1)
+        topk_val, topk_idx = torch.topk(sims, self.k, dim=1)
+
+        mask = torch.zeros_like(sims, dtype=torch.bool)
+        mask.scatter_(1, topk_idx, True)
+        masked_sims = sims * mask
+
+        for m in m_list:
+            reduced_sims = torch.triu(torch.matmul(adapted_embeddings[:, :m], adapted_embeddings[:, :m].T), diagonal=1)
+            masked_reduced_sims = reduced_sims * mask
+            loss = torch.abs(masked_sims - masked_reduced_sims)
+            loss = loss.mean()
+
+        reducer = torch.sum(topk_val.reshape(-1).where(topk_val.reshape(-1) == 0, 1))
+        return loss / reducer
 
 
 class Pooler(nn.Module):
@@ -272,4 +295,4 @@ class Matryoshka(nn.Module):
         if self.adaptor:
             output = self.adaptor(output)
         
-        return output
+        return self.normalizer(output)
