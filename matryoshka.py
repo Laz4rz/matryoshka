@@ -97,7 +97,8 @@ class Matryoshka(nn.Module):
                  model_name="sentence-transformers/all-MiniLM-L6-v2",
                  matryoshka_dim=64,
                  device="cpu",
-                 adaptor=False
+                 adaptor=False,
+                 disable_gradients=True
                  ):
         super(Matryoshka, self).__init__()
         self.device = device
@@ -115,6 +116,9 @@ class Matryoshka(nn.Module):
         self.model_card_data = MODEL_CARD_DATA
         self.matryoshka_dim = matryoshka_dim
         self.adaptor = adaptor
+        if disable_gradients:
+            for param in self.model.parameters():
+                param.requires_grad = False
         if adaptor:
             self.adaptor = Adaptor(self.model.config.hidden_size)
 
