@@ -75,6 +75,20 @@ class BaseModel(nn.Module):
 
     def forward(self, **kwargs):
         return self.model(**kwargs)[0] # only return the hidden states, no pooler output
+    
+
+class Adaptor(nn.Module):
+    
+        def __init__(self, hidden_size):
+            super(Adaptor, self).__init__()
+            self.down_project = nn.Linear(hidden_size, 256)
+            self.activation = nn.ReLU()
+            self.up_project = nn.Linear(256, hidden_size)
+
+        def forward(self, inputs):
+            down_projected = self.activation(self.down_project(inputs))
+            up_projected = self.up_project(down_projected)
+            return up_projected
 
 
 class Matryoshka(nn.Module):
@@ -82,7 +96,9 @@ class Matryoshka(nn.Module):
     def __init__(self,
                  model_name="sentence-transformers/all-MiniLM-L6-v2",
                  matryoshka_dim=64,
-                 device="cpu"):
+                 device="cpu",
+                 adaptor=False
+                 ):
         super(Matryoshka, self).__init__()
         self.device = device
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -98,6 +114,9 @@ class Matryoshka(nn.Module):
         self.name = f"Matryoshka(model={model_name.split('/')[-1]}, dim={matryoshka_dim})"
         self.model_card_data = MODEL_CARD_DATA
         self.matryoshka_dim = matryoshka_dim
+        self.adaptor = adaptor
+        if adaptor:
+            self.adaptor = Adaptor(self.model.config.hidden_size)
 
     def encode(self, sentences, batch_size=32, **kwargs):
         """ Returns a list of embeddings for the given sentences.
@@ -145,12 +164,19 @@ class Matryoshka(nn.Module):
             all_embeddings[idx] for idx in np.argsort(length_sorted_idx)
         ]
 
-        return all_embeddings
+        return np.array(all_embeddings)
 
-    def forward(self, **kwargs):
-        model_output = self.model(**kwargs)
-        model_output_reduced = model_output[:, :, :self.matryoshka_dim]
-        pooled_output = self.pooler(model_output_reduced,
-                                    kwargs['attention_mask'])
-        normalized_output = self.normalizer(pooled_output)
-        return normalized_output
+    def forward(self, pooling=True, reduce=True, **kwargs):
+        output = self.model(**kwargs)
+
+        if self.adaptor:
+            output = self.adaptor(output)
+
+        if reduce:
+            output = output[:, :, :self.matryoshka_dim]
+
+        if pooling:
+            output = self.pooler(output,
+                                        kwargs['attention_mask'])
+            output = self.normalizer(output)
+        return output
