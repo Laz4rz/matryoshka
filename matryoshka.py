@@ -112,7 +112,7 @@ class Matryoshka(nn.Module):
 
         assert self.model.config.hidden_size >= matryoshka_dim, \
             f"Model hidden size ({self.model.config.hidden_size}) must be greater than or equal to matryoshka_dim ({matryoshka_dim})"
-        self.name = f"Matryoshka(model={model_name.split('/')[-1]}, dim={matryoshka_dim})"
+        self.name = f"Matryoshka(model={model_name.split('/')[-1]}, dim={matryoshka_dim}, adaptor={adaptor})"
         self.model_card_data = MODEL_CARD_DATA
         self.matryoshka_dim = matryoshka_dim
         self.adaptor = adaptor

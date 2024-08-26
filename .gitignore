@@ -10,3 +10,10 @@ data/
 
 # data reference in readme
 !data/*.md
+
+# wandb
+wandb/
+
+# .idea
+.idea/
+

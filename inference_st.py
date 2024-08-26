@@ -7,7 +7,7 @@ from matryoshka import Matryoshka
 sentences = ["This is an example sentence", "Each sentence is converted"]
 
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-matryoshka = Matryoshka(matryoshka_dim=384)
+matryoshka = Matryoshka(matryoshka_dim=384, adaptor=True)
 
 embeddings = model.encode(sentences)
 matryoshka_embeddings = matryoshka.encode(sentences)
