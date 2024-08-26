@@ -17,3 +17,6 @@ wandb/
 # .idea
 .idea/
 
+# models
+models/
+*.pth

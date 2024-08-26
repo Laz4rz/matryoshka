@@ -20,6 +20,70 @@ MODEL_CARD_DATA = {
 }
 
 
+class PairwiseSimilarityLoss(nn.Module):
+    def __init__(self):
+        super(PairwiseSimilarityLoss, self).__init__()
+
+    def forward(self, embeddings, adapted_embeddings, m_list, reduce=True):
+        """
+        embeddings: Original high-dimensional embeddings, shape (N, d)
+        adapted_embeddings: Adapted embeddings after applying some transformation, shape (N, d)
+        m_list: List of reduced dimensions to calculate the loss for (e.g., [128, 256, 512])
+        """
+        loss = 0.0
+        counter = 0
+
+        partial_loss = {m: 0.0 for m in m_list}
+
+        for i in range(len(embeddings)):
+            for j in range(len(adapted_embeddings[i:])):
+                target_similarity = F.cosine_similarity(embeddings[i].squeeze(0), embeddings[j].squeeze(0), dim=0)
+                for m in m_list:
+                    reduced_similarity = F.cosine_similarity(adapted_embeddings[i, :m].squeeze(0), adapted_embeddings[j, :m].squeeze(0), dim=0)
+                    loss += torch.abs((reduced_similarity - target_similarity))
+                    partial_loss[m] += torch.abs((reduced_similarity - target_similarity))
+                    counter += 1
+
+        if reduce == True:
+            loss = loss / counter
+            partial_loss = {m: loss / counter for m, loss in partial_loss.items()}
+        return loss, partial_loss
+    
+
+class PairwiseSimilarityLossParallel(nn.Module):
+    def __init__(self):
+        super(PairwiseSimilarityLossParallel, self).__init__()
+
+    def forward(self, embeddings, adapted_embeddings, m_list, reduce=True):
+        """
+        embeddings: Original high-dimensional embeddings, shape (N, d)
+        adapted_embeddings: Adapted embeddings after applying some transformation, shape (N, d)
+        m_list: List of reduced dimensions to calculate the loss for (e.g., [128, 256, 512])
+        """
+        loss = 0.0
+        counter = 0
+        partial_counter = 0
+
+        partial_loss = {m: 0.0 for m in m_list}
+
+        # something is potentially wrong with indexing, single check yields correct loss
+        for i in range(len(embeddings)):
+            cloned_target = embeddings[i].unsqueeze(0).repeat(len(embeddings), 1)
+            target_similarity = F.cosine_similarity(cloned_target[i:], embeddings[i:], dim=1)
+            cloned_adapted = adapted_embeddings[i].unsqueeze(0).repeat(len(adapted_embeddings), 1)
+            for m in m_list:
+                reduced_similarity = F.cosine_similarity(cloned_adapted[i:, :m], adapted_embeddings[i:, :m], dim=1)
+                loss += torch.sum(torch.abs((reduced_similarity - target_similarity)))
+                partial_loss[m] += torch.sum(torch.abs((reduced_similarity - target_similarity)))
+                counter += len(target_similarity)
+            partial_counter += len(target_similarity)
+
+        if reduce:
+            partial_counter = counter // len(m_list)
+            return loss / counter, {m: loss / partial_counter for m, loss in partial_loss.items()}
+        return loss, partial_loss
+
+
 class Pooler(nn.Module):
 
     def __init__(self, hidden_size=None, base_model=None, cls_token_pooler=False, mean_pooler=True):
@@ -106,12 +170,11 @@ class Matryoshka(nn.Module):
     def __init__(self,
                  model_name="sentence-transformers/all-MiniLM-L6-v2",
                  matryoshka_dim=64,
-                 device="cpu",
                  adaptor=False,
                  disable_gradients=True
                  ):
         super(Matryoshka, self).__init__()
-        self.device = device
+        self.base_model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
         self.model = BaseModel(model_name)
@@ -132,7 +195,7 @@ class Matryoshka(nn.Module):
         if adaptor:
             self.adaptor = Adaptor(self.model.config.hidden_size)
 
-    def encode(self, sentences, batch_size=32, **kwargs):
+    def encode(self, sentences, batch_size=32, matryoshka_dim=None, device="cpu", **kwargs):
         """ Returns a list of embeddings for the given sentences.
         
         Args:
@@ -163,7 +226,7 @@ class Matryoshka(nn.Module):
                                     truncation=True,
                                     return_tensors="pt",
                                     **valid_kwargs)
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            inputs = {k: v.to(device) for k, v in inputs.items()}
 
             with torch.no_grad():
                 embeddings = self(**inputs)
@@ -178,19 +241,12 @@ class Matryoshka(nn.Module):
             all_embeddings[idx] for idx in np.argsort(length_sorted_idx)
         ]
 
+        if matryoshka_dim is not None:
+            return np.array(all_embeddings)[:, :matryoshka_dim]
         return np.array(all_embeddings)
 
     def forward(self, pooling=True, reduce=True, skip=False, **kwargs):
         output = self.model(**kwargs)
-
-        if self.adaptor:
-            if skip:
-                skipped = output.clone()
-            output = self.adaptor(output)
-            if skip:
-                output = output + skipped
-
-
         if reduce:
             output = output[:, :, :self.matryoshka_dim]
 
@@ -198,4 +254,12 @@ class Matryoshka(nn.Module):
             output = self.pooler(output,
                                         kwargs['attention_mask'])
             output = self.normalizer(output)
+
+        if self.adaptor:
+            if skip:
+                output = output + self.normalizer(self.adaptor(output))
+            else:
+                output = self.adaptor(output)
+            output = self.normalizer(output)
+        
         return output
