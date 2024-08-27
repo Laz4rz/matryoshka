@@ -6,6 +6,8 @@ Implemented the unsupervised part of *Matryoshka-Adaptor: Unsupervised and Super
 - Only including all of the above steps allows bringing the performance of adaptor embeddings to the base model embeddings, sometimes surpassing them by a tiny margin
 - Partial and final results are available in `eval_gather.ipynb`
 
+Alpha change marks 0, 10, and 24 training epoch. Dashed line means baseline performance with no adaptor.
+
 ![alt text](images/final.png)
 
 ### Low Hanging Fruits
