@@ -11,31 +11,13 @@ Implemented the unsupervised part of *Matryoshka-Adaptor: Unsupervised and Super
 - Only including all of the above steps allows bringing the performance of adaptor embeddings to the base model embeddings, sometimes surpassing them by a tiny margin
 - Partial and final results are available in `eval_gather.ipynb`
 
+![alt text](images/final.png)
+
 ### Low Hanging Fruits
 - Try different adaptor architectures (deeper, with attention etc.)
 - Pre-compute base embeddings to speed up training
 - More training data
 - Eval BEIR during training to skip postprocessing
-
-### Outputs
-![alt text](images/outputs.png)
-
-**model(x) output:**
-```python
-model_output is a tuple
-model_output[0] -- embedding per token -> [batch, tokens, 384]
-model_output[1] -- embedding per token + pooling -> [batch, 384]
-```
-
-**model pooler:**
-```python
-(pooler): BertPooler(
-    (dense): Linear(in_features=384, out_features=384, bias=True)
-    (activation): Tanh()
-)
-```
-
-Instead of pooling in classical sense (aggregation statistic), it takes the CLS token from first postion per each batch item. 
 
 
 ### BEIR
@@ -158,3 +140,24 @@ class TopKSimilarityLoss(nn.Module):
         reducer = torch.sum(topk_val.reshape(-1).where(topk_val.reshape(-1) == 0, 1))
         return loss / reducer
 ```
+
+### Outputs
+![alt text](images/outputs.png)
+
+**model(x) output:**
+```python
+model_output is a tuple
+model_output[0] -- embedding per token -> [batch, tokens, 384]
+model_output[1] -- embedding per token + pooling -> [batch, 384]
+```
+
+**model pooler:**
+```python
+(pooler): BertPooler(
+    (dense): Linear(in_features=384, out_features=384, bias=True)
+    (activation): Tanh()
+)
+```
+
+Instead of pooling in classical sense (aggregation statistic), it takes the CLS token from first postion per each batch item. 
+
