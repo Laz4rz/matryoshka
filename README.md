@@ -1,7 +1,7 @@
 # matryoshka
 
 ### Early results
-Implemented the unsupervised part of *Matryoshka-Adaptor: Unsupervised and Supervised Tuning for Smaller Embedding Dimensions*, by training with pairwise loss, top-k loss, and regularization loss. Only the adaptor parameters were trained. Adaptor consists of down-, and up-projection layers with ReLU non-linearity, a layernorm and a skip-connection. Training and testing was done using BEIR task data: NFCorpus.
+Implemented the unsupervised part of *Matryoshka-Adaptor: Unsupervised and Supervised Tuning for Smaller Embedding Dimensions*, by training on the *all-MiniLM-L6-v2* embeddings with pairwise loss, top-k loss, and regularization loss. Only the adaptor parameters were trained. Adaptor consists of down-, and up-projection layers with ReLU non-linearity, a layernorm and a skip-connection. Training and testing was done using BEIR task data: NFCorpus.
 
 - Only including all of the above steps allows bringing the performance of adaptor embeddings to the base model embeddings, sometimes surpassing them by a tiny margin
 - Partial and final results are available in `eval_gather.ipynb`
