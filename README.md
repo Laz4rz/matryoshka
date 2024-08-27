@@ -1,10 +1,5 @@
 # matryoshka
 
-```
-tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
-model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
-```
-
 ### Early results
 Implemented the unsupervised part of *Matryoshka-Adaptor: Unsupervised and Supervised Tuning for Smaller Embedding Dimensions*, by training with pairwise loss, top-k loss, and regularization loss. Only the adaptor parameters were trained. Adaptor consists of down-, and up-projection layers with ReLU non-linearity, a layernorm and a skip-connection. Training and testing was done using BEIR task data: NFCorpus.
 
@@ -141,7 +136,13 @@ class TopKSimilarityLoss(nn.Module):
         return loss / reducer
 ```
 
-### Outputs
+### Outputs of a typical embedding model
+
+```
+tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+```
+
 ![alt text](images/outputs.png)
 
 **model(x) output:**
